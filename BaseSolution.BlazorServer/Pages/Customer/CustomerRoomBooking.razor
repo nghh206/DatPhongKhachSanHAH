@@ -1,0 +1,170 @@
+﻿@page "/customer/RoomBooking"
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBookingDetail.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail.Request
+@using BaseSolution.BlazorServer.Respository.Interfaces
+@inject IdCustomer idCustomer
+@inject NavigationManager navigation
+
+<CustomListDisplayP2 Label="@("Thông tin đặt phòng")" IsLoading="@(_isLoadingAll)" DisableSearch="_isDisableControls" OnSearch="@OnSearch">
+    <HeaderContent>
+
+    </HeaderContent>
+
+    <BodyContent>
+        <MudPaper Elevation="0" Class="custom-list-display-border">
+            @if (_lstRoomBooking == null)
+            {
+                <MudText>Không có phòng</MudText>
+            }
+            @if (_isLoadingList)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"></MudProgressLinear>
+            }
+            else
+            {
+                <MudCard Class="p-3" Elevation="0">
+                    <MudTable Items="@_roomBookingVM.Data">
+                        <HeaderContent>
+                            <MudTh>STT</MudTh>
+                            <MudTh>Thời gian đặt</MudTh>
+                            <MudTh>Loại phòng</MudTh>
+                            <MudTh>Kiểu đặt phòng</MudTh>
+                            <MudTh>Thanh toán trước</MudTh>
+                            <MudTh>Giá phòng</MudTh>
+                            <MudTh>Trạng thái</MudTh>
+                            <MudTh>Hành động</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@(_lstRoomBooking.IndexOf(context) + 1)</MudTd>
+                            <MudTd>@context.CreatedTime.ToString("HH:mm dd/MM/yyyy")</MudTd>
+                                <MudTd>@context.NameRoomType</MudTd>
+                                <MudTd>@context.BookingType</MudTd>
+                                <MudTd>@context.PrePaid VNĐ</MudTd>
+                            <MudTd>@context.RoomPrice VNĐ</MudTd>
+                            <MudTd><BadgeRoomStatus Status="@context.StatusRoom"></BadgeRoomStatus></MudTd>
+                            @if (context.StatusRoom == RoomStatus.AwaitingConfirmation)
+                            {
+                                <MudTd>
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="(async () => await CancelBooking(context.Id))">Hủy</MudButton>
+                                </MudTd>
+                            }
+                            else
+                            {
+                                <MudTd></MudTd>
+                            }
+                        </RowTemplate>
+                    </MudTable>
+                    <MudDivider />
+                    <CustomPagination Class="my-1" HasNext="@_roomBookingVM.HasNext" OnPageChange="@(async e=> await  OnPaginationButtonClick(e))" CurrentPageNumber="_roomBookingVM.PageNumber"></CustomPagination>
+                </MudCard>
+            }
+        </MudPaper>
+    </BodyContent>
+</CustomListDisplayP2>
+
+
+
+
+@code {
+    [Parameter]
+    public Guid customerId { get; set; }
+    [Inject]
+    public IRoomBookingRespo _roomBookingRepo { get; set; }
+    [Inject]
+    public IRoomBookingDetailRepo _roomBookingDetailRepo { get; set; }
+    [Inject]
+    public IRoomDetailRespo _roomDetailRepo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+    private Guid _idRoomDetail = Guid.Empty;
+    #region
+    private PaginationResponse<RoomBookingDto> _roomBookingVM;
+    private List<RoomBookingDto> _lstRoomBooking;
+    private ViewRoombookingPaginationRequest _roomBookingRequest = new();
+    private RoomBookingDeleteRequest _roomBookingDelete = new();
+    private RoomDetailUpdateStatusRequest _updateRoomDetailStatus = new();
+    private RoomBookingDetailDeleteRequest _deleteRoomBookingDetail = new();
+    private RoomBookingUpdateStatusRequest _updateRoomBookingStatus = new();
+    #endregion
+    #region
+    private bool _isLoadingList = true;
+    private bool _isLoadingAll = true;
+    private bool _isDisableControls = false;
+    #endregion
+    protected override async Task OnInitializedAsync()
+    {
+        customerId = IdCustomer.Instance.Id;
+        await LoadData();
+    }
+    private async Task LoadData()
+    {
+        _roomBookingVM = new PaginationResponse<RoomBookingDto>
+            {
+                Data = new List<RoomBookingDto>()
+            };
+
+        var roomBookings = await _roomBookingRepo.GetRoomBookingByIdCustomerAsync(customerId);
+        foreach (var roomBooking in roomBookings)
+        {
+            if (roomBooking.StatusRoom == RoomStatus.Reserved || roomBooking.StatusRoom == RoomStatus.AwaitingConfirmation)
+            {
+                _roomBookingVM.Data.Add(roomBooking);
+            }
+        }
+        _lstRoomBooking = _roomBookingVM.Data!.ToList();
+        _isLoadingAll = false;
+        _isLoadingList = false;
+    }
+    #region RoomBooking
+    private async Task OnPaginationButtonClick(int pageNumber)
+    {
+        if (_isDisableControls) return;
+        _isLoadingList = true;
+        _roomBookingRequest.PageNumber = pageNumber;
+        await LoadData();
+    }
+    private async Task OnSearch(string? searchString)
+    {
+        _isLoadingAll = true;
+        _roomBookingRequest.PageNumber = 1;
+        _roomBookingRequest.SearchString = searchString;
+        await LoadData();
+    }
+    private async Task CancelBooking(Guid idRoomBooking)
+    {
+        var confirm = await _dialogService.ShowMessageBox
+      (
+          "Thông báo",
+          "Xác nhận hủy?",
+          "Xác nhận",
+          cancelText: "Hủy"
+      );
+        if (confirm == true)
+        {
+            _updateRoomBookingStatus.Id = idRoomBooking;
+            _updateRoomBookingStatus.Status = EntityStatus.InActive;
+            var updateRoomBooking = await _roomBookingRepo.UpdateStatusRoomBooking(_updateRoomBookingStatus);
+
+            _roomBookingDelete.Id = idRoomBooking;
+            var deleteRoomBooking = await _roomBookingRepo.DeleteRoomBooking(_roomBookingDelete);
+
+            var getRoomBookingDetail = await _roomBookingDetailRepo.GetRoomBookingDetailByRoomBookingId(idRoomBooking);
+            _deleteRoomBookingDetail.Id = getRoomBookingDetail.Id;
+            var deleteRoomBookingDetail = await _roomBookingDetailRepo.DeleteRoomBookingDetail(_deleteRoomBookingDetail);
+
+            _updateRoomDetailStatus.Id = getRoomBookingDetail.RoomDetailId;
+            _updateRoomDetailStatus.Status = RoomStatus.Vacant;
+            var updateRoomDetail = await _roomDetailRepo.UpdateRoomDetailStatus(_updateRoomDetailStatus);
+            _snackbar.Add("Đã huỷ đặt phòng!", Severity.Success);
+        }
+    }
+    #endregion
+
+
+}

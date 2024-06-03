@@ -1,0 +1,154 @@
+﻿@page "/login"
+@layout EmptyLayout
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Acount;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Acount.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Role.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Role;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.User;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.User.Request;
+@using BaseSolution.BlazorServer.Pages.Manager;
+@using BaseSolution.BlazorServer.Respository.Interfaces;
+@using Blazored.SessionStorage;
+@using System.Security.Claims;
+@inject AuthenticationStateProvider _authProvider
+@inject ISessionStorageService _session
+<div class="d-flex align-center justify-center w-100" style="height: 70vh">
+    <MudPaper Class="pa-4">
+        <h3>Login</h3>
+        <MudForm Model="request" @ref="form">
+            <MudTextField T="string" Label="Tài khoản" @bind-Value="request.UserName" Required="true" />
+            <MudTextField @bind-Value="request.Password" Label="Password" Variant="Variant.Text" InputType="@PasswordInput" Adornment="Adornment.End" AdornmentIcon="@PasswordInputIcon" OnAdornmentClick="ButtonTestclick" AdornmentAriaLabel="Show Password" />
+            <MudRadioGroup @bind-SelectedOption="@RoleId" ReadOnly="ReadOnly">
+                @foreach (var role in lstRole)
+                {
+                    <MudRadio Option="role.Id.ToString()">@role.RoleCode</MudRadio>
+                }
+
+            </MudRadioGroup>
+            <MudSpacer></MudSpacer>
+            <MudButton Variant="Variant.Filled" Color="Color.Info" OnClick="@LoginUser">Đăng nhập</MudButton>
+        </MudForm>
+    </MudPaper>
+</div>
+
+@code {
+    bool isShow;
+    InputType PasswordInput = InputType.Password;
+    string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+    [Inject]
+    public IUserRepo userRespo { get; set; }
+    [Inject]
+    NavigationManager navigation { get; set; }
+    public bool checkAdmin { get; set; } = false;
+    MudForm form;
+    [Inject]
+    public ILogin loginRepo { get; set; }
+    [Inject]
+    public IRoleRespo roleRespo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+
+    private ViewRoleWithPaginationRequest roleRequest = new();
+    private List<RoleDto> lstRole = new();
+    private PaginationResponse<RoleDto> roleVM;
+
+
+    private List<UserHotelDTO> lstUser;
+    private PaginationResponse<UserHotelDTO> userVM;
+    private ViewUsersHotelWithPaginationRequest userRequest = new();
+
+    private LoginInputRequest request = new();
+    private ViewLoginInput loginVm = new();
+
+    private string RoleId = "4f49aa59-b4df-4149-ac60-c595c3926ffb"; // vì RoleId ở radio không được null => gán 1 giá trị tạm thời vào 
+    public bool ReadOnly { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        userVM = await userRespo.GetAllUser(userRequest);
+        lstUser = userVM.Data!.ToList();
+        roleVM = await roleRespo.GetAllRole(roleRequest);
+        lstRole = roleVM.Data!.ToList();
+
+    }
+    private async Task LoginUser()
+    {
+
+        request.UserRoleId = Guid.Parse(RoleId);
+        bool loginSuccessful = false;
+        foreach (var item in lstUser)
+        {
+            if (request.UserName == item.UserName && request.Password == item.Password)
+            {
+                if (request.UserRoleId != item.UserRoleId)
+                {
+                    _snackbar.Add("Quyền đăng nhập không tồn tại!", Severity.Error);
+                }
+                else
+                {
+                    LoginSuccess();
+                    loginSuccessful = true;
+                    break;
+                }
+            }
+        }
+        if (!loginSuccessful && !lstUser.Any(user => user.UserName == request.UserName && user.Password == request.Password))
+        {
+            _snackbar.Add("Tài khoản hoặc mật khẩu không đúng!", Severity.Error);
+        }
+
+        return;
+    }
+
+    private async Task LoginSuccess()
+    {
+
+        loginVm = await loginRepo.Login(request);
+        _snackbar.Add("Đăng nhập thành công", Severity.Success);
+        await HandlingAuthentication();
+        if(loginVm.RoleCode == "Admin")
+        {
+            navigation.NavigateTo("/statistic/roombookingstatistic"); // sau khi login xong thì muốn chuyển đến màn nào thì chuyển sang màn đó
+        }
+        else
+        {
+            navigation.NavigateTo("/roombooking"); // sau khi login xong thì muốn chuyển đến màn nào thì chuyển sang màn đó
+        }
+    }
+    // Sự kiện pass word
+    void ButtonTestclick()
+    {
+        @if (isShow)
+        {
+            isShow = false;
+            PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+            PasswordInput = InputType.Password;
+        }
+        else
+        {
+            isShow = true;
+            PasswordInputIcon = Icons.Material.Filled.Visibility;
+            PasswordInput = InputType.Text;
+        }
+    }
+    // nhét thông tin đăng nhập vào thôi
+    private async Task HandlingAuthentication()
+    {
+        List<Claim> lstClaim = new()
+        {
+            new Claim(ClaimTypes.Name,loginVm.UserName),
+            new Claim(ClaimTypes.Role, loginVm.RoleCode),
+            new Claim("Id",loginVm.Id.ToString()),
+            new Claim("Ten",loginVm.Name),
+        };
+        var customAuth = (CustomAuthenticationStateProvider)_authProvider;
+        await customAuth.UpdateAuthenticationState(lstClaim);
+    }
+
+}

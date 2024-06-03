@@ -1,0 +1,72 @@
+﻿@using Data.DataTransferObjects.Building.Request
+@using Respository.Interfaces
+@using Data.DataTransferObjects.Building
+
+<MudDialog>
+    <DialogContent>
+        <MudPaper Elevation="0">
+            <MudForm Model="_buildingCreate" @bind-IsValid="success" @ref="_form">
+                <MudTextField Class="mb-2" @bind-Value="_buildingCreate.Name" For="@(() => _buildingCreate.Name)" Label="Tên tòa nhà"></MudTextField>
+            </MudForm>
+            
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@OnClickCancel">Hủy</MudButton>
+        <MudButton @onclick="Reset">Làm mới</MudButton>
+        <MudButton @onclick="CreateNewBuilding" Disabled="@(!success)">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IBuildingRespo _buildingRespo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+    private BuildingCreateRequest _buildingCreate = new();
+    private bool success;
+    MudForm _form;
+    private void OnClickCancel()
+    {
+        MudDialog.Cancel();
+    }
+    private async Task CreateNewBuilding()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+        var confirm = await _dialogService.ShowMessageBox
+        (
+            "Thông báo",
+            "Xác nhận thêm tòa nhà?",
+            "Xác nhận",
+            cancelText: "Hủy"
+        );
+        if(confirm == true)
+        {
+            var result = await _buildingRespo.CreateBuilding(_buildingCreate);
+            if(result == true)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+                _snackbar.Add("Thêm thành công", Severity.Success);
+            }
+            else
+            {
+                OnClickCancel();
+                _snackbar.Add
+                (
+                    "Thêm thất bại",
+                     Severity.Error
+                );
+            }
+            Reset();
+        }
+    }
+    private void Reset()
+    {
+        _buildingCreate = new BuildingCreateRequest();
+    }
+}

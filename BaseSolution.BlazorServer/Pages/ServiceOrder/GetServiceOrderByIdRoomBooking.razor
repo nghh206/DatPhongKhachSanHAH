@@ -1,0 +1,116 @@
+﻿@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomType
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Service;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.ServiceOrder;
+@using BaseSolution.BlazorServer.Pages.ServiceOrderDetail;
+@using BaseSolution.BlazorServer.Respository.Interfaces
+<MudDialog>
+    <DialogContent>
+        @if (_lstServiceOrder == null)
+        {
+            <MudText>Không có dịch vụ nào</MudText>
+        }
+        else
+        {
+            <MudChip Icon="@Icons.Material.Filled.Add" @onclick="async() => await OpenAdd()" Color="Color.Primary" Style="float:right">Thêm dịch vụ</MudChip>
+
+            @if (_lstServiceOrder.Count != 0)
+            {
+                <MudTable Items="_lstServiceOrder.First().lstServiceOrder">
+                    <RowTemplate>
+                        <MudTd>@(_lstServiceOrder.First().lstServiceOrder.IndexOf(context) + 1)</MudTd>
+                            <MudTd>@context.ServiceName</MudTd>
+                            <MudTd>@context.Amount</MudTd>
+                            <MudTd>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+            }
+        }
+    </DialogContent>
+   
+</MudDialog>
+
+@code {
+    #region
+    [Parameter]
+    public Guid idroomBookingDetail { get; set; }
+
+    [Parameter]
+    public Guid CustomerId { get; set; }
+
+    [Parameter]
+    public Guid ServiceOrderId { get; set; }
+
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IServiceOrderRepo serviceOrderRepo { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+    [Inject]
+    public IDialogService dialogService { get; set; }
+
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+
+    private ServiceOrderForRoomBookingDTO? serviceOderInfo;
+
+
+    private PaginationResponse<ServiceOrderForRoomBookingDTO> _ServiceOrderlVM = new PaginationResponse<ServiceOrderForRoomBookingDTO>();
+    private List<ServiceOrderForRoomBookingDTO>? _lstServiceOrder;
+
+    private ViewRoomDetailWithPaginationRequest roomDetailRequest = new();
+    bool _isDisableControls = false;
+    #endregion
+
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+    private async Task LoadData()
+    {
+        _ServiceOrderlVM.Data = await serviceOrderRepo.GetServiceOrderByIdRoomBooking(idroomBookingDetail);
+        _lstServiceOrder = _ServiceOrderlVM.Data!.ToList();
+    }
+    public async Task OpenAdd()
+    {
+        if(ServiceOrderId == Guid.Empty)
+        {
+            var parameters = new DialogParameters<ServiceOrderCreateForRoomBooking>();
+
+            parameters.Add(x => x.idroomBookingDetail, idroomBookingDetail);
+            parameters.Add(x => x.idCustomer, CustomerId);
+            var dialog = await _dialogService.ShowAsync<ServiceOrderCreateForRoomBooking>("Thêm dịch vụ", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Canceled)
+            {
+                await LoadData();
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            var parameters = new DialogParameters<ServiceOrderDetailForRoom>();
+
+            parameters.Add(x => x.idServiceOrder, ServiceOrderId);
+            var dialog = await _dialogService.ShowAsync<ServiceOrderDetailForRoom>("Thêm dịch vụ", parameters);
+            var result = await dialog.Result;
+
+            if (!result.Canceled)
+            {
+                await LoadData();
+                StateHasChanged();
+            }
+        }
+      
+    }
+    private async Task OnClickCancel()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+        await LoadData();
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,83 @@
+﻿@using BaseSolution.BlazorServer.Data.DataTransferObjects.AmenityRoomDetail
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.AmenityRoomDetail.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomType
+@using BaseSolution.BlazorServer.Respository.Implements
+@using BaseSolution.BlazorServer.Respository.Interfaces
+
+<MudDialog>
+    <DialogContent>
+        @if (_roomTypeInfo == null || _roomTypeInfo.NumberOfAmenityRoomDetail == 0)
+        {
+            <MudText>Không có tiện ích nào</MudText>
+        }
+        else
+        {
+            <MudTable Items="lstAmenityRoomDetail" Style="height: 40vh; overflow: auto;" Hover="true">
+                <HeaderContent>
+                    <MudTh>Tên tiện ích</MudTh>
+                    <MudTh>Số lượng của tiện ích</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd>@context.NameOfAmenity</MudTd>
+                    <MudTd>@context.Amount</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_roomTypeInfo == null)
+        {
+            <MudButton OnClick="OnClickCancel">Hủy</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="OnClickCancel">Hủy</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+@code {
+    #region
+    [Parameter]
+    public Guid idRoomType { get; set; }
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IAmenityRespo amenityRepo { get; set; }
+    [Inject]
+    public IAmenityRoomDetailRespo amenityRoomDetailRepo { get; set; }
+    [Inject]
+    public IDialogService dialogService { get; set; }
+    [Inject]
+    public ISnackbar snackbar { get; set; }
+    [Inject]
+    public IRoomTypeRepo roomTypeRespo { get; set; }
+    MudForm _form;
+    private bool _formIsValid;
+    private RoomTypeDTO? _roomTypeInfo;
+    private PaginationResponse<AmenityRoomDetailDTO> _amenityRoomDetail;
+    private List<AmenityRoomDetailDTO>? lstAmenityRoomDetail;
+    private ViewAmenityRoomDetailWithPaginationRequest amenityRoomDetailRequest = new()
+    {
+            PageSize = int.MaxValue - 1,
+    };
+    #endregion
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+    private async Task LoadData()
+    {
+        _roomTypeInfo = await roomTypeRespo.GetRoomTypeById(idRoomType);
+        amenityRoomDetailRequest.RoomTypeId = idRoomType;
+        _amenityRoomDetail = await amenityRoomDetailRepo.GetAllAmentityRoomDetail(amenityRoomDetailRequest);
+        lstAmenityRoomDetail = _amenityRoomDetail.Data!
+         .GroupBy(a => a.NameOfAmenity) // Nhóm các tiện ích theo tên
+         .Select(g => g.First()) // Chỉ lấy bản ghi đầu tiên trong mỗi nhóm
+         .ToList();
+        
+    }
+    private void OnClickCancel()
+    {
+        MudDialog.Cancel();
+    }
+}

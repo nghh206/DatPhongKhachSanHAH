@@ -1,0 +1,232 @@
+﻿@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Service.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.ServiceType;
+@using BaseSolution.BlazorServer.Extensions;
+@using BaseSolution.BlazorServer.Pages.Customer;
+@using BaseSolution.BlazorServer.Respository.Interfaces;
+<MudDialog>
+    <DialogContent>
+        @if (_isLoadingList)
+        {
+            <LoadingIndicator></LoadingIndicator>
+        }
+        else
+        {
+            <MudForm Model="@roomBookingCreateRequest" @ref="_form">
+                <MudPaper Elevation="0">
+                    <MudTextField Label="Tìm kiếm khách hàng" @bind-Value="searchMDD" TextChanged="OnTextChanged" />
+                    <MudSelect T="string" Label="Khách hàng" Class="mb-2"
+                               AnchorOrigin="Origin.BottomCenter" @bind-Value="@customerId" For="@(() => customerId)" C>
+                        @foreach (var item in lstCustomeerFillter)
+                        {
+                            <MudSelectItem Value="@item.Id.ToString()">@item.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudChip Icon="@Icons.Material.Filled.Add" @onclick="async() => await OpenAdd()" Color="Color.Primary">Thêm khách hàng mới</MudChip>
+                    <MudItem>
+                        <MudTextField T="DateTime?" Format="s" @bind-Value="checkIn" Label="Giờ vào" InputType="InputType.DateTimeLocal" />
+                    </MudItem>
+
+                    <MudItem>
+                        <MudTextField T="DateTime?" Format="s" @bind-Value="checkOut" Label="Giờ ra" InputType="InputType.DateTimeLocal" />
+                    </MudItem>
+
+                    <MudChip Icon="@Icons.Material.Filled.Search" @onclick="async() => await LoadCombobox()" Color="Color.Primary">Tìm kiếm phòng trống</MudChip>
+                    <MudSelect T="string" Label="Phòng còn trống" Class="mb-2"
+                               AnchorOrigin="Origin.BottomCenter" @bind-Value="@roomDetailId" For="@(() => roomDetailId)">
+                        @foreach (var item in lstRoomDetails)
+                        {
+                            <MudSelectItem Value="@item.Id.ToString()">@item.Name: Số lượng người ở: @item.MaxPeopleStay</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                </MudPaper>
+            </MudForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="OnClickCancel">Hủy</MudButton>
+        <MudButton OnClick="Reset">Khôi phục</MudButton>
+        <MudButton OnClick="CreateNewRoomBooking">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    #region Khai báo
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IRoomDetailRespo roomDetailRespo { get; set; }
+    [Inject]
+
+    public IRoomBookingDetailRepo roomBookingDetailRespo { get; set; }
+    [Inject]
+
+    public IRoomBookingRespo roomBookingRespo { get; set; }
+    [Inject]
+    public ICustomerRepo cumtomerRespo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+
+    // private ViewRoomDetailByCheckInCheckOutRequest roomDetailRequest = new();
+
+    private ViewCustomerWithPaginationRequest customer = new()
+        {
+            PageSize = int.MaxValue - 1
+        };
+
+    private PaginationResponse<RoomDetailDTO> roomDetailVM;
+    private PaginationResponse<CustomerDTO> CustomerVM;
+
+    List<RoomDetailDTO> lstRoomDetails = new();
+    List<CustomerDTO> lstCustomer = new();
+    List<CustomerDTO> lstCustomeerFillter = new();
+    private RoombookingCreateRequest roomBookingCreateRequest = new();
+
+    private string roomDetailId;
+    private string customerId;
+    private string searchMDD;
+
+    DateTime? checkIn = DateTime.Now;
+    DateTime? checkOut = DateTime.Now;
+
+    private bool _isLoadingList = true;
+    MudForm _form;
+    #endregion
+    #region Code xử lý
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+    private async Task LoadData()
+    {
+
+        CustomerVM = await cumtomerRespo.GetCustomer(customer);
+        lstCustomer = CustomerVM.Data!.ToList();
+
+        _isLoadingList = false;
+    }
+    private async Task LoadCombobox()
+    {
+        var roomDetail = new ViewRoomDetailByCheckInCheckOutRequest
+            {
+                CheckInBooking = (DateTimeOffset)checkIn!,
+                CheckOutBooking = (DateTimeOffset)checkOut!,
+            };
+        roomDetailVM = await roomDetailRespo.GetAllRoomDetailsByStatus(roomDetail);
+        lstRoomDetails = roomDetailVM.Data!.ToList();
+
+        StateHasChanged();
+    }
+
+    private void OnTextChanged(string value)
+    {
+        searchMDD = value;
+        lstCustomeerFillter = lstCustomer.Where(x => x.IdentificationNumber == searchMDD).ToList();
+    }
+
+    private void OnClickCancel()
+    {
+        MudDialog.Cancel();
+    }
+    private void Reset()
+    {
+        roomBookingCreateRequest = new();
+    }
+    private async Task CreateNewRoomBooking()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+        var confirm = await _dialogService.ShowMessageBox
+        (
+            "Thông báo",
+            "Xác nhận đặt phòng?",
+            "Xác nhận",
+            cancelText: "Hủy"
+        );
+        if (confirm == true)
+        {
+            try
+            {
+
+                if (checkIn > checkOut)
+                {
+                    _snackbar.Add
+                   (
+                       "Giờ ra không hợp lệ!",
+                        Severity.Error
+                   );
+                    return;
+                }
+
+                if (checkOut < DateTime.Now || checkIn < DateTime.Now)
+                {
+                    _snackbar.Add
+                   (
+                       "Giờ không hợp lệ!",
+                        Severity.Error
+                   );
+                    return;
+                }
+
+                roomBookingCreateRequest.RoomDetailId = Guid.Parse(roomDetailId);
+                roomBookingCreateRequest.CustomerId = Guid.Parse(customerId);
+                roomBookingCreateRequest.BookingType = BookingType.Offline;
+                roomBookingCreateRequest.CodeBooking = UtilityExtentions.GenerateRandomString(6);
+                roomBookingCreateRequest.CheckOutBooking = (DateTimeOffset)checkOut;
+                roomBookingCreateRequest.CheckInBooking = (DateTimeOffset)checkIn;
+                roomBookingCreateRequest.Price = lstRoomDetails.FirstOrDefault(x => x.Id == roomBookingCreateRequest.RoomDetailId)!.Price;
+
+                if (roomBookingCreateRequest.RoomDetailId == Guid.Empty || roomBookingCreateRequest.CustomerId == Guid.Empty || checkOut == null || checkIn == null)
+                {
+                    _snackbar.Add
+                   (
+                       "Vui lòng nhập đủ dữ liệu!",
+                        Severity.Error
+                   );
+                    return;
+                }
+
+                var result = await roomBookingRespo.CreateNewRoomBooking(roomBookingCreateRequest);
+                if (result == true)
+                {
+                    MudDialog.Close(DialogResult.Ok(true));
+                    _snackbar.Add("Thêm thành công", Severity.Success);
+                }
+                else
+                {
+                    _snackbar.Add
+                    (
+                        "Thêm thất bại",
+                         Severity.Error
+                    );
+                }
+                Reset();
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+
+        }
+    }
+
+    private async Task OpenAdd()
+    {
+        var dialog = await _dialogService.ShowAsync<AdminCreateCustomer>("Thêm khách hàng đặt ");
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            StateHasChanged();
+        }
+    }
+    #endregion
+}

@@ -1,0 +1,137 @@
+﻿@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomType
+@using BaseSolution.BlazorServer.Respository.Interfaces
+<MudDialog>
+    <DialogContent>
+        @if (_lstRoomDetail == null)
+        {
+            <MudText>Không có phòng nào</MudText>
+        }
+        else
+        {
+            @* <MudPaper Elevation="0" Class="pa-2">
+        <MudItem>
+        <MudDatePicker PickerVariant="PickerVariant.Dialog" Label="Giờ vào" DateFormat="dd/MM/yyyy" @bind-Date="checkIn" Required="true" />
+        </MudItem>
+        <MudItem>
+        <MudDatePicker PickerVariant="PickerVariant.Dialog" Label="Giờ ra" DateFormat="dd/MM/yyyy" @bind-Date="checkOut" Required="true" />
+        </MudItem>
+        <MudChip Icon="@Icons.Material.Filled.Search" Color="Color.Primary" OnClick="@( async() => await FilterByTime())" Disabled="@_isDisableControls">Tìm theo thời gian</MudChip>
+        </MudPaper> *@
+            <MudPaper Elevation="0" Class="pa-2">
+                <MudTable Items="_lstRoomDetail">
+                    <HeaderContent>
+                        <MudTh>STT</MudTh>
+                        <MudTh>Tên phòng</MudTh>
+                        <MudTh>Giá</MudTh>
+                        <MudTh>Số người tối đa</MudTh>
+                        <MudTh>Diện tích phòng</MudTh>
+                        <MudTh>Hành động</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@(_lstRoomDetail.IndexOf(context) + 1)</MudTd>
+                        <MudTd>@context.Name</MudTd>
+                            <MudTd>@context.Price</MudTd>
+                            <MudTd>@context.MaxPeopleStay</MudTd>
+                            <MudTh>@context.RoomSize</MudTh>
+                            <MudTh>
+                                <MudChip Icon="@Icons.Material.Filled.MenuOpen" Color="Color.Primary" OnClick="@( async() => await OpenDetail(context.Id))" Disabled="@_isDisableControls">Xem phòng</MudChip>
+                                <MudChip Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="@( async() => await OpenAdd(context.Id))" Disabled="@_isDisableControls">Đặt phòng</MudChip>
+                            </MudTh>
+                        </RowTemplate>
+
+                    </MudTable>
+                </MudPaper>
+
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (roomTypeInfo == null)
+        {
+            <MudButton OnClick="OnClickCancel">Hủy</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="OnClickCancel">Hủy</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    #region
+    [Parameter]
+    public Guid idRoomType { get; set; }
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IRoomDetailRespo roomDetailRespo { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public IRoomTypeRepo roomTypeRespo { get; set; }
+    private RoomTypeDTO? roomTypeInfo;
+    DateTime? checkIn = DateTime.Now;
+    DateTime? checkOut = DateTime.Now;
+    private PaginationResponse<RoomDetailDTO> _roomDetailVM = new PaginationResponse<RoomDetailDTO>();
+    private List<RoomDetailDTO>? _lstRoomDetail = new();
+    private ViewRoomDetailWithPaginationRequest _roomDetailRequest = new();
+    bool _isDisableControls = false;
+    #endregion
+
+    protected async override Task OnInitializedAsync()
+    {
+        await FilterByTime();
+    }
+
+    private async Task FilterByTime()
+    {
+
+        var roomDetail = new ViewRoomDetailByCheckInCheckOutRequest
+            {
+                CheckInBooking = (DateTimeOffset)checkIn!,
+                CheckOutBooking = (DateTimeOffset)checkOut!,
+            };
+        _roomDetailVM = await roomDetailRespo.GetAllRoomDetailsByStatus(roomDetail);
+        _lstRoomDetail = _roomDetailVM.Data!.Where(x => x.Status == RoomStatus.Vacant).ToList();
+        _lstRoomDetail = _lstRoomDetail.Where(r => r.RoomTypeId == idRoomType).ToList();
+        StateHasChanged();
+
+    }
+    public async Task OpenAdd(Guid idRoomDetail)
+    {
+        var getStatus = await roomDetailRespo.GetRoomDetailById(idRoomDetail);
+        if (getStatus.Status == RoomStatus.Vacant)
+        {
+            var parameters = new DialogParameters<RoomBookingCreate>();
+            parameters.Add(x => x.idRoomDetail, idRoomDetail);
+            var dialog = await _dialogService.ShowAsync<RoomBookingCreate>("Đặt phòng", parameters);
+            var result = await dialog.Result;
+            if (!result.Canceled)
+            {
+                await FilterByTime();
+            }
+        }
+        else
+        {
+            _snackbar.Add("Phòng không thể thuê!", Severity.Info);
+        }
+    }
+    public async Task OpenDetail(Guid idRoomDetail)
+    {
+        var parameters = new DialogParameters<RoomDetail>();
+        parameters.Add(x => x.idRoomDetail, idRoomDetail);
+        var dialog = await _dialogService.ShowAsync<RoomDetail>("Chi tiết phòng", parameters);
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await FilterByTime();
+        }
+    }
+    private void OnClickCancel()
+    {
+        MudDialog.Cancel();
+    }
+}

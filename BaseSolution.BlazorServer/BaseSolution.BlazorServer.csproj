@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+	  <TargetFramework>net6.0</TargetFramework>
+	  <Nullable>enable</Nullable>
+	  <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="Pages\Error.cshtml" />
+    <None Include="Pages\_Host.cshtml" />
+    <None Include="Pages\_Layout.cshtml" />
+    <None Include="Shared\MainLayout.razor" />
+    <None Include="Shared\NavMenu.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Blazored.FluentValidation" Version="2.1.0" />
+    <PackageReference Include="Blazored.SessionStorage" Version="2.4.0" />
+    <PackageReference Include="MailKit" Version="4.3.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components" Version="6.0.25" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="6.0.25" />
+    <PackageReference Include="MimeKit" Version="4.3.0" />
+    <PackageReference Include="MudBlazor" Version="6.11.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Text.Json" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\image\RoomDetail\" />
+  </ItemGroup>
+
+</Project>

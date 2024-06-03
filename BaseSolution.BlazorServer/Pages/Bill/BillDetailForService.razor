@@ -1,0 +1,113 @@
+﻿@using BaseSolution.BlazorServer.Data.DataTransferObjects.Bill;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Bill.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Service;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Service.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.ServiceOrder.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.ServiceType;
+@using BaseSolution.BlazorServer.Pages.Customer;
+@using BaseSolution.BlazorServer.Respository.Interfaces;
+
+<MudForm Model="@bill" @ref="_form" class="custom-form">
+    <MudPaper Elevation="0" class="custom-paper">
+        <MudItem class="custom-item">
+            <MudTextField Label="Tên khách hàng" Value="bill.CustomerName" ReadOnly="true" class="custom-textfield" />
+        </MudItem>
+        <MudItem class="custom-item">
+            <MudTextField Label="Tổng số dịch vụ" Value="bill.Quantity" ReadOnly="true" class="custom-textfield" />
+        </MudItem>
+        <MudItem class="custom-item">
+            <MudTextField Label="Tổng tiền" Value="bill.TotalAmount" ReadOnly="true" class="custom-textfield" />
+        </MudItem>
+    </MudPaper>
+</MudForm>
+
+<style>
+    /* Style for the MudForm container */
+    .custom-form {
+        max-width: 600px; /* Adjust the width as needed */
+        margin: auto;
+        padding: 20px;
+    }
+
+    /* Style for the MudPaper component */
+    .custom-paper {
+        border: 1px solid #ccc;
+        padding: 15px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+    }
+
+    /* Style for MudItem components (adjust as needed) */
+    .custom-item {
+        margin-bottom: 15px;
+    }
+
+    /* Style for MudTextField components */
+    .custom-textfield {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+        /* Optional: Style for labels */
+        .custom-textfield label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* Optional: Style for read-only fields */
+        .custom-textfield[readonly] {
+            background-color: #f5f5f5;
+            color: #555;
+            cursor: not-allowed;
+        }
+
+    /* Optional: Style for the form title */
+    .custom-form-title {
+        font-size: 24px;
+        margin-bottom: 20px;
+    }
+</style>
+<MudButton OnClick="OnClickCancel">Hủy</MudButton>
+
+@code {
+    #region Khai báo
+    [Parameter]
+    public Guid idBill { get; set; }
+    MudForm _form;
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IBillRespo billRepo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    private bool _isLoadingAll = true;
+    private bool _isLoadingList = true;
+    private bool _isDisableControls = false;
+    private ViewBillWithPaginationRequest request = new();
+
+    private BillDtoForService? bill = new();
+
+    #endregion
+
+    #region Code xử lý
+    protected async override Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+    private async Task LoadData()
+    {
+        bill = await billRepo.GetBillByIdForService(idBill);
+    }
+    private void OnClickCancel()
+    {
+        MudDialog.Cancel();
+    }
+   
+    #endregion
+}

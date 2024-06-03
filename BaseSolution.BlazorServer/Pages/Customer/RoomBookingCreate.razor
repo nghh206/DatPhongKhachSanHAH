@@ -1,0 +1,227 @@
+﻿@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBookingDetail
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBookingDetail.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Service.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.ServiceType;
+@using BaseSolution.BlazorServer.Extensions
+@using BaseSolution.BlazorServer.Pages.Customer;
+@using BaseSolution.BlazorServer.Respository.Interfaces;
+
+@inject IdCustomer idCustomer
+@inject NavigationManager navigation
+
+<MudDialog>
+    <DialogContent>
+        @if (_isLoadingList)
+        {
+            <LoadingIndicator></LoadingIndicator>
+        }
+        else
+        {
+            <MudForm Model="@_roomBookingCreateRequest" @ref="_form">
+                <MudPaper Elevation="0">
+                    <MudItem>
+                        <MudTextField T="DateTime?" Format="s" @bind-Value="checkIn" Label="Giờ vào" InputType="InputType.DateTimeLocal" />
+                    </MudItem>
+
+                    <MudItem>
+                        <MudTextField T="DateTime?" Format="s" @bind-Value="checkOut" Label="Giờ ra" InputType="InputType.DateTimeLocal" />
+                    </MudItem>
+                </MudPaper>
+            </MudForm>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="OnClickCancel">Hủy</MudButton>
+        <MudButton OnClick="Reset">Khôi phục</MudButton>
+        <MudButton OnClick="CreateNewRoomBooking">Đặt phòng</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    #region Khai báo
+    [Parameter]
+    public Guid customerId { get; set; }
+    [Parameter]
+    public Guid idRoomDetail { get; set; }
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IRoomDetailRespo roomDetailRespo { get; set; }
+    [Inject]
+    public IRoomBookingRespo roomBookingRespo { get; set; }
+    [Inject]
+    public ICustomerRepo customerRespo { get; set; }
+    [Inject]
+    public IRoomBookingDetailRepo roomBookingDetailRepo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+
+    private ViewRoomDetailWithPaginationRequest _roomDetailPaginationRequest = new();
+    private PaginationResponse<CustomerDTO> _customerVM;
+    private ViewCustomerWithPaginationRequest customer = new();
+
+    private PaginationResponse<RoomDetailDTO> _roomDetailVM;
+    List<RoomDetailDTO> lstRoomDetails = new();
+    List<CustomerDTO> lstCustomer = new();
+    private RoombookingCreateRequest _roomBookingCreateRequest = new();
+    private RoomBookingDetailUpdate2Request _roomBookingDetailUpdateRequest = new();
+    private RoomDetailUpdateStatusRequest _roomDetailUpdateStatusRequest = new();
+    private bool _isLoadingList = true;
+    MudForm _form;
+
+    DateTime? checkIn = DateTime.Now;
+    DateTime? checkOut = DateTime.Now;
+    #endregion
+    #region Code xử lý
+    protected override async Task OnInitializedAsync()
+    {
+        customerId = IdCustomer.Instance.Id;
+        await LoadData();
+        // await LoadCombobox();
+    }
+    private async Task LoadData()
+    {
+
+        _customerVM = await customerRespo.GetCustomer(customer);
+        lstCustomer = _customerVM.Data!.ToList();
+
+        _isLoadingList = false;
+    }
+    private void OnClickCancel()
+    {
+        MudDialog.Cancel();
+    }
+    // private async Task LoadCombobox()
+    // {
+    //     var roomDetail = new ViewRoomDetailByCheckInCheckOutRequest
+    //         {
+    //             CheckInBooking = (DateTimeOffset)checkIn,
+    //             CheckOutBooking = (DateTimeOffset)checkOut,
+    //         };
+    //     _roomDetailVM = await roomDetailRespo.GetAllRoomDetailsByStatus(roomDetail);
+    //     if (_roomDetailVM.Data != null && _roomDetailVM.Data.Count > 0)
+    //     {
+    //         lstRoomDetails = _roomDetailVM.Data.ToList();
+    //     }
+    //     else
+    //     {
+    //         _snackbar.Add("Không có phòng nào!", Severity.Info);
+    //     }
+    // }
+
+    private void Reset()
+    {
+        _roomBookingCreateRequest = new();
+        idRoomDetail = Guid.Empty;
+    }
+    private async Task CreateNewRoomBooking()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+        var confirm = await _dialogService.ShowMessageBox
+        (
+            "Thông báo",
+            "Xác nhận thêm phòng?",
+            "Xác nhận",
+            cancelText: "Hủy"
+        );
+        if (confirm == true)
+        {
+            try
+            {
+                if (checkIn > checkOut)
+                {
+                    _snackbar.Add
+                   (
+                       "Giờ ra không hợp lệ!",
+                        Severity.Error
+                   );
+                    return;
+                }
+                if (checkIn < DateTime.Now || checkOut < DateTime.Now)
+                {
+                    _snackbar.Add
+                   (
+                       "Giờ không hợp lệ!",
+                        Severity.Error
+                   );
+                    return;
+                }
+                if (customerId == Guid.Empty)
+                {
+                    _snackbar.Add("Hãy đăng nhập để có thể đặt phòng", Severity.Info);
+                    navigation.NavigateTo("/login-customer");
+                }
+                else
+                {
+                    var getStatusCustomer = await customerRespo.GetCustomerById(customerId);
+
+                    if (getStatusCustomer.Status == EntityStatus.Active)
+                    {
+                        var code = UtilityExtentions.GenerateRandomString(6);
+                        _roomBookingCreateRequest.RoomDetailId = idRoomDetail;
+                        _roomBookingCreateRequest.CustomerId = customerId;
+                        _roomBookingCreateRequest.BookingType = BookingType.Online;
+                        _roomBookingCreateRequest.CodeBooking = code;
+                        _roomBookingCreateRequest.CheckInBooking = (DateTimeOffset)checkIn;
+                        _roomBookingCreateRequest.CheckOutBooking = (DateTimeOffset)checkOut;
+                        var result = await roomBookingRespo.CreateRoomBooking(_roomBookingCreateRequest);
+
+                        if (result.ToString() != null)
+                        {
+                            var getPriceRoomDetail = await roomDetailRespo.GetRoomDetailById(idRoomDetail);
+                            var getId = await roomBookingDetailRepo.GetRoomBookingDetailByRoomBookingId(result);
+
+                            _roomBookingDetailUpdateRequest.Id = getId.Id;
+                            _roomBookingDetailUpdateRequest.RoomBookingId = getId.RoomBookingId;
+                            _roomBookingDetailUpdateRequest.Price = getPriceRoomDetail.Price;
+                            _roomBookingDetailUpdateRequest.CheckInBooking = (DateTimeOffset)checkIn;
+                            _roomBookingDetailUpdateRequest.CheckOutBooking = (DateTimeOffset)checkOut;
+                            _roomBookingDetailUpdateRequest.CheckInReality = (DateTimeOffset)checkIn;
+                            _roomBookingDetailUpdateRequest.CheckOutReality = (DateTimeOffset)checkOut;
+                            _roomBookingDetailUpdateRequest.PrePaid = getPriceRoomDetail.Price * (decimal)0.3;
+                            _roomBookingDetailUpdateRequest.RoomDetailId = getId.RoomDetailId;
+
+                            var updateRoomBookingDetail = await roomBookingDetailRepo.UpdateRoomBookingDetail2(_roomBookingDetailUpdateRequest);
+
+                            _roomDetailUpdateStatusRequest.Id = idRoomDetail;
+                            _roomDetailUpdateStatusRequest.Status = RoomStatus.AwaitingConfirmation;
+                            _roomDetailUpdateStatusRequest.ModifiedBy = customerId;
+                            var updateRoomDetailStatus = await roomDetailRespo.UpdateRoomDetailStatus(_roomDetailUpdateStatusRequest);
+                            MudDialog.Close(DialogResult.Ok(true));
+                            _snackbar.Add("Thêm thành công", Severity.Success);
+
+                        }
+                        else
+                        {
+                            _snackbar.Add
+                            (
+                                "Thêm thất bại",
+                                 Severity.Error
+                            );
+                        }
+                        Reset();
+                    }
+                    else
+                    {
+                        await _dialogService.ShowMessageBox("Thông báo", "Bạn chưa kích hoạt mã code để có thể đặt phòng!", "Xác nhận", cancelText: "Hủy");
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                _snackbar.Add($"{ex}", Severity.Error);
+            }
+
+        }
+    }
+    #endregion
+}

@@ -1,0 +1,70 @@
+﻿@using BaseSolution.BlazorServer.Data.DataTransferObjects.Amenity.Request;
+@using BaseSolution.BlazorServer.Respository.Interfaces;
+<MudDialog>
+    <DialogContent>
+        <MudPaper Elevation="0">
+            <MudForm Model="amenityCreateRequest" @bind-IsValid="success" @ref="_form">
+                <MudTextField Class="mb-2" @bind-Value="amenityCreateRequest.Name" For="@(() => amenityCreateRequest.Name)" Label="Tên tiện ích"></MudTextField>
+                <MudTextField Class="mb-2" @bind-Value="amenityCreateRequest.Description" For="@(() => amenityCreateRequest.Description)" Label="Mô tả"></MudTextField>
+            </MudForm>
+
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@OnClickCancel">Hủy</MudButton>
+        <MudButton @onclick="Reset">Làm mới</MudButton>
+        <MudButton @onclick="CreateNewBuilding" Disabled="@(!success)">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+@code {
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+    [Inject]
+    public IAmenityRespo amenityRespo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+    private CreateAmenityRequest amenityCreateRequest = new();
+    private bool success;
+    MudForm _form;
+    private void OnClickCancel()
+    {
+        MudDialog.Cancel();
+    }
+    private async Task CreateNewBuilding()
+    {
+        await _form.Validate();
+        if (!_form.IsValid) return;
+        var confirm = await _dialogService.ShowMessageBox
+        (
+            "Thông báo",
+            "Xác nhận thêm tòa nhà?",
+            "Xác nhận",
+            cancelText: "Hủy"
+        );
+        if (confirm == true)
+        {
+            var result = await amenityRespo.CreateNewAmenity(amenityCreateRequest);
+            if (result == true)
+            {
+                MudDialog.Close(DialogResult.Ok(true));
+                _snackbar.Add("Thêm thành công", Severity.Success);
+            }
+            else
+            {
+                OnClickCancel();
+                _snackbar.Add
+                (
+                    "Thêm thất bại",
+                     Severity.Error
+                );
+            }
+            Reset();
+        }
+    }
+    private void Reset()
+    {
+        amenityCreateRequest = new CreateAmenityRequest();
+    }
+}

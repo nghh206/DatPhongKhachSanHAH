@@ -1,0 +1,198 @@
+﻿@page "/roombooking"
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Amenity;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Amenity.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Bill.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking.Request;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail;
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomDetail.Request;
+@using BaseSolution.BlazorServer.Pages.Customer;
+@using BaseSolution.BlazorServer.Pages.Service;
+@using BaseSolution.BlazorServer.Pages.ServiceOrder;
+@using BaseSolution.BlazorServer.Respository.Interfaces;
+<PageTitle>Quản lý tiện ích khách sạn</PageTitle>
+<CustomListDisplayP2 Label="@("Danh sách các phòng đã đặt ")" IsLoading="_isLoadingAll" DisableSearch="_isDisableControls" OnSearch="@OnSearch">
+    <HeaderContent>
+        <MudChip Icon="@Icons.Material.Filled.Add" @onclick="async() => await OpenAdd()" Color="Color.Primary">Thêm</MudChip>
+    </HeaderContent>
+    <BodyContent>
+        <MudPaper Elevation="0" Class="custom-list-display-border">
+            @if (lstRoomBooking == null)
+            {
+                <MudText>Không có data</MudText>
+            }
+            @if (_isLoadingList)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true"></MudProgressLinear>
+            }
+            else
+            {
+                <MudCard Class="p-3" Elevation="0">
+                    <MudTable Items="@roomBookingVM.Data" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>STT</MudTh>
+                            <MudTh> Khách hàng</MudTh>
+                            <MudTh>Thông tin phòng</MudTh>
+                            <MudTh>Kiểu đặt phòng</MudTh>
+                            <MudTh>Số lượng dịch vụ</MudTh>
+                            <MudTh>Tổng tiền</MudTh>
+                            <MudTh>Trạng thái</MudTh>
+                            <MudTh>Hành động</MudTh>
+                            <MudTh></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@(lstRoomBooking.IndexOf(context) + 1)</MudTd>
+                                <MudTd>@context.NameCustomer</MudTd>
+                                <MudTh>@context.NameBuilding / @context.NameFloor / @context.NameRoom</MudTh>
+                                <MudTh>@context.BookingType</MudTh>
+                                <MudTh>@context.TotalService<MudChip Icon="@Icons.Material.Filled.ListAlt" OnClick="@(() => OpenService(context.RoomBookingDetailId,context.CustomerId,context.ServiceOrderId))"></MudChip></MudTh>
+                                <MudTh>@context.TotalAmount VNĐ</MudTh>
+
+                                <MudTd><BadgeRoomStatus Status="@context.StatusRoom"></BadgeRoomStatus></MudTd>
+                                <MudTd>
+                                    <MudChip Icon="@Icons.Material.Filled.MenuOpen" Color="Color.Primary" OnClick="@(() => OpenDetail(context.Id))" Disabled="@_isDisableControls">Chi tiết</MudChip>
+                                </MudTd>
+                                <MudTd>
+                                    <MudChip Color="Color.Primary" OnClick="@(() => Pay(context.Id,context.CustomerId,context.ServiceOrderId))" Disabled="@_isDisableControls">Thanh toán</MudChip>
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                        <MudDivider />
+                        <CustomPagination Class="my-1" HasNext="@roomBookingVM.HasNext" OnPageChange="@(async e=> await  OnPaginationButtonClick(e))" CurrentPageNumber="roomBookingVM.PageNumber"></CustomPagination>
+                    </MudCard>
+            }
+        </MudPaper>
+    </BodyContent>
+</CustomListDisplayP2>
+@code {
+    #region Khai báo
+    [Inject]
+    public IRoomBookingRespo roomBookingRespo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    [Inject]
+    public IBillRespo billRepo { get; set; }
+    private BillCreateRequest createBillRequest = new();
+    [Inject]
+    public ISnackbar _snackbar { get; set; }
+    private PaginationResponse<RoomBookingDto> roomBookingVM;
+    private bool _isLoadingAll = true;
+    private bool _isLoadingList = true;
+    private bool _isDisableControls = false;
+    private ViewRoombookingPaginationRequest roomBookingRequest = new();
+    private List<RoomBookingDto> lstRoomBooking;
+    #endregion
+    #region Code xử lý
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+    private async Task LoadData()
+    {
+        roomBookingVM = await roomBookingRespo.GetAllRoomBooking(roomBookingRequest);
+        lstRoomBooking = roomBookingVM.Data!.ToList();
+        _isLoadingList = false;
+        _isLoadingAll = false;
+    }
+    private async Task OnPaginationButtonClick(int pageNumber)
+    {
+        if (_isDisableControls) return;
+        _isLoadingList = true;
+        roomBookingRequest.PageNumber = pageNumber;
+        await LoadData();
+    }
+
+    private async Task OnSearch(string? searchString)
+    {
+        _isLoadingList = true;
+        roomBookingRequest.PageNumber = 1;
+        roomBookingRequest.SearchString = searchString;
+        await LoadData();
+
+    }
+    private async Task OpenService(Guid idroomBookingDetail, Guid CustomerId,Guid idServiceOrder)
+    {
+        try
+        {
+            var parameters = new DialogParameters<GetServiceOrderByIdRoomBooking>();
+            parameters.Add(x => x.idroomBookingDetail, idroomBookingDetail);
+            parameters.Add(x => x.CustomerId, CustomerId);
+            parameters.Add(x => x.ServiceOrderId, idServiceOrder);
+            var dialog = await _dialogService.ShowAsync<GetServiceOrderByIdRoomBooking>("Danh sách dịch vụ", parameters);
+            var result = await dialog.Result;
+              await LoadData();
+              StateHasChanged();
+        }
+        catch (Exception)
+        {
+
+            throw;
+        }
+
+    }
+    #endregion
+    #region Code event
+    private async Task OpenAdd()
+    {
+        var dialog = await _dialogService.ShowAsync<RoombookingCreate>("Thêm phòng đặt ");
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await LoadData();
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenDetail(Guid idRoomBooking)
+    {
+        var parameters = new DialogParameters<RoomBookingUpdate>();
+        parameters.Add(x => x.idRoomBooking, idRoomBooking);
+        var dialog = await _dialogService.ShowAsync<RoomBookingUpdate>("Chi tiết phòng", parameters);
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+    private async Task Pay(Guid idRoomBooking, Guid idCustomer, Guid ServiceOrderId)
+    {
+
+        var confirm = await _dialogService.ShowMessageBox
+        (
+            "Thông báo",
+            "Xác nhận thanh toán?",
+            "Xác nhận",
+            cancelText: "Hủy"
+        );
+        if (confirm == true)
+        {
+            Guid? ServiceOrder;
+            if (ServiceOrderId == Guid.Empty)
+            {
+                ServiceOrder = null;
+            }
+            else
+            {
+                ServiceOrder = ServiceOrderId;
+            }
+            var bill = new BillCreateRequest
+                {
+                    CustomerId = idCustomer,
+                    ServiceOrderId = ServiceOrder,
+                    RoomBookingId = idRoomBooking
+                };
+            await billRepo.CreateNewBill(bill);
+            _snackbar.Add("Đã thanh toán ! Vui lòng xem thông tin ở quản lí hóa đơn ", Severity.Info);
+            await LoadData();
+            StateHasChanged();
+        }
+        else
+        {
+            _snackbar.Add("Thanh toán đã được hủy", Severity.Info);
+
+        }
+
+    }
+
+    #endregion
+}

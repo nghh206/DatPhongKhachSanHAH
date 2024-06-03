@@ -1,0 +1,106 @@
+﻿@page "/customer/RoomBookingHistory"
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.Customer.Request
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking
+@using BaseSolution.BlazorServer.Data.DataTransferObjects.RoomBooking.Request
+@using BaseSolution.BlazorServer.Respository.Interfaces
+@inject IdCustomer idCustomer
+
+<CustomListDisplayP2 Label="Lịch sử đặt phòng" IsLoading="@(_isLoadingAll)" OnSearch="@OnSearch">
+    <HeaderContent>
+
+    </HeaderContent>
+
+    <BodyContent>
+        <MudPaper Elevation="0" Class="custom-list-display-border">
+            @if (_isLoadingAll)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="m-3" />
+            }
+            else
+            {
+                <MudCard Class="p-3" Elevation="0">
+                    <MudTable Items="@_roomBookingVM.Data">
+                        <HeaderContent>
+                            <MudTh>STT</MudTh>
+                            <MudTh>Thông tin phòng</MudTh>
+                            <MudTh>Ngày đặt</MudTh>
+                            <MudTh>Checkin</MudTh>
+                            <MudTh>Checkout</MudTh>
+                            <MudTh>Thanh toán trước</MudTh>
+                            <MudTh>Giá phòng</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@(_lstRoomBooking.IndexOf(context) + 1)</MudTd>
+                            <MudTd>@context.NameBuilding - @context.NameFloor - @context.NameRoom</MudTd>
+                            <MudTd>@context.CreatedTime.ToString("hh:mm dd/MM/yyyy")</MudTd>
+                                <MudTd>@context.CheckInBooking.ToString("hh:mm dd/MM/yyyy")</MudTd>
+                                <MudTh>@context.CheckOutBooking.ToString("hh:mm dd/MM/yyyy")</MudTh>
+                                <MudTh>@context.PrePaid VNĐ</MudTh>
+                            <MudTh>@context.RoomPrice VNĐ</MudTh>
+                            </RowTemplate>
+                        </MudTable>
+                        <MudDivider />
+                        <CustomPagination Class="my-1" HasNext="@_roomBookingVM.HasNext" OnPageChange="@(async e=> await  OnPaginationButtonClick(e))" CurrentPageNumber="_roomBookingVM.PageNumber"></CustomPagination>
+                    </MudCard>
+            }
+        </MudPaper>
+    </BodyContent>
+</CustomListDisplayP2>
+
+
+@code {
+    [Parameter]
+    public Guid customerId { get; set; }
+    [Inject]
+    public IRoomBookingRespo roomBookingRespo { get; set; }
+    [Inject]
+    public IDialogService _dialogService { get; set; }
+    public ISnackbar _snackbar { get; set; }
+    private PaginationResponse<RoomBookingDto> _roomBookingVM;
+    private bool _isLoadingAll = true;
+    private bool _isLoadingList = true;
+    private bool _isDisableControls = false;
+    private ViewRoombookingPaginationRequest roomBookingRequest = new();
+    private List<RoomBookingDto> _lstRoomBooking;
+
+    protected override async Task OnInitializedAsync()
+    {
+        customerId = IdCustomer.Instance.Id;
+        await LoadData();
+    }
+    private async Task LoadData()
+    {
+        _roomBookingVM = new PaginationResponse<RoomBookingDto>
+            {
+                Data = new List<RoomBookingDto>()
+            };
+
+        var roomBookings = await roomBookingRespo.GetRoomBookingByIdCustomerAsync(customerId);
+        foreach (var roomBooking in roomBookings)
+        {
+            if (roomBooking.Status == EntityStatus.Deleted || roomBooking.Status == EntityStatus.InActive)
+            {
+                _roomBookingVM.Data.Add(roomBooking);
+            }
+        }
+        _lstRoomBooking = _roomBookingVM.Data!.OrderByDescending(x => x.CreatedTime).ToList();
+        _isLoadingList = false;
+        _isLoadingAll = false;
+    }
+    private async Task OnPaginationButtonClick(int pageNumber)
+    {
+        if (_isDisableControls) return;
+        _isLoadingList = true;
+        roomBookingRequest.PageNumber = pageNumber;
+        await LoadData();
+    }
+
+    private async Task OnSearch(string? searchString)
+    {
+        _isLoadingList = true;
+        roomBookingRequest.PageNumber = 1;
+        roomBookingRequest.SearchString = searchString;
+        await LoadData();
+
+    }
+}
